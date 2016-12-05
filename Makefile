@@ -1,14 +1,17 @@
-RESULT=voronoi
-SOURCES=src/examples.ml src/sat_solver.mli src/sat_solver.ml src/voronoi.ml
-LIBS=graphics
+all:
+	ocamlbuild -pkg graphics voronoi.native -I src
 
-OCAMLMAKEFILE=OCamlMakefile
-include $(OCAMLMAKEFILE)
+dist: report clean
+	base=$$(basename "$${PWD}") && name='decimo-zibulski' && \
+	cd .. && mv "$${base}" "$${name}" && \
+	tar --exclude-vcs -czvf "$${name}.tar.gz" --exclude-vcs-ignores "$${name}" && \
+	mv "$${name}" "$${base}"
 
-dist: clean
-	base=$$(basename $${PWD}) && name='decimo-zibulski' && \
-	cd .. && mv $${base} $${name} && \
-	tar czvf $${name}.tar.gz $${name} --exclude-vcs && \
-	mv $${name} $${base} && cd $${base}
+report:
+	cd 'report' && pdflatex 'report.tex'
 
-.PHONY: dist
+clean:
+	ocamlbuild -clean
+	rm -rf report/*.aux report/*.log
+
+.PHONY: dist clean report
