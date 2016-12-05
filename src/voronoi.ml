@@ -3,11 +3,12 @@
  * https://caml.inria.fr/pub/docs/manual-ocaml/libref/Array.html *)
 
 open Graphics;;
+open Examples;;
 
-type seed = {c : color option; x : int; y : int}
-type voronoi = {dim: int * int; seeds : seed array}
+let v = v4;;
 
-let euclidean (x1, y1) (x2, y2) = int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
+let euclidean (x1, y1) (x2, y2) =
+  int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
 let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
 let taxicab2 (x1, y1) (x2, y2) = max (abs (x1 - x2)) (abs (y1 - y2));;
 let fn a b = int_of_float (sqrt ((float)(euclidean a b))) + taxicab a b;;
@@ -108,7 +109,8 @@ let produce_constraints cl b =
     for i = 0 to Array.length b - 1 do
       for c = 0 to Array.length colors - 1 do
         for c' = c + 1 to Array.length colors - 1 do
-          fnc := [(false, {Variables.i = i; c = colors.(c)}); (false, {Variables.i = i; c = colors.(c')})] :: !fnc
+          fnc := [(false, {Variables.i = i; c = colors.(c)});
+                  (false, {Variables.i = i; c = colors.(c')})] :: !fnc
         done
       done
     done;
@@ -120,56 +122,76 @@ let produce_constraints cl b =
       for j = 0 to Array.length b - 1 do
         if i <> j && b.(i).(j) then
           for c = 0 to Array.length colors - 1 do
-            fnc := [(false, {Variables.i = i; c = colors.(c)}); (false, {Variables.i = j; c = colors.(c)})] :: !fnc
+            fnc := [(false, {Variables.i = i; c = colors.(c)});
+                    (false, {Variables.i = j; c = colors.(c)})] :: !fnc
           done
       done
     done;
     fnc
   in
 
-  !(exists (unique (adjacence (ref []))));;
+  let pre_colored fnc =
+    for i = 0 to Array.length b - 1 do
+      match cl.(i) with
+      | None -> ()
+      | Some(c) -> fnc := [(true, {Variables.i = i; c = c})] :: !fnc
+    done;
+    fnc
+  in
 
-let v4 =  {
-  dim = 800,800;
-  seeds = [|
-    {c = None; x=100; y=75};
-    {c = None; x=125; y=225};
-    {c = Some red; x=25; y=255};
-    {c = None; x=60; y=305};
-    {c = Some blue; x=50; y=400};
-    {c = Some green; x=100; y=550};
-    {c = Some green; x=150; y=25};
-    {c = Some red; x=200; y=55};
-    {c = None; x=200; y=200};
-    {c = None; x=250; y=300};
-    {c = None; x=300; y=450};
-    {c = None; x=350; y=10};
-    {c = None; x=357; y=75};
-    {c = Some yellow; x=450; y=80};
-    {c = Some blue; x=400; y=150};
-    {c = None; x=550; y=350};
-    {c = None; x=400; y=450};
-    {c = None; x=400; y=500};
-    {c = Some red; x=500; y=75};
-    {c = Some green; x=600; y=100};
-    {c = Some red; x=700; y=75};
-    {c = None; x=578; y=175};
-    {c = None; x=750; y=205};
-    {c = None; x=520; y=345};
-    {c = None; x=678; y=420};
-    {c = None; x=600; y=480};
-    {c = Some blue; x=650; y=480};
-    {c = None; x=750; y=500};
-    {c = None; x=600; y=550};
-    {c = Some red; x=700; y=550};
-  |]
-}
+  !(pre_colored (exists (unique (adjacence (ref [])))));;
 
-let v = v4;;
+let rec color_from_valuation v vl =
+  match vl with
+  | [] -> ()
+  | (b, l) :: t ->
+    let s = v.seeds.(l.Variables.i) in
+    if b then
+      v.seeds.(l.Variables.i) <- {c = Some l.Variables.c; x = s.x; y = s.y};
+    color_from_valuation v t;;
 
-let () =
+let print_bool b = print_string (if b then "true" else "false");;
+
+let print_valuation v =
+  let print_color c =
+    print_string (
+      if c = white then "white" else
+      if c = red then "red" else
+      if c = blue then "blue" else
+      if c = yellow then "yellow" else
+      if c = green then "green" else "") in
+
+  match v with
+  | Some v ->
+    begin
+      let rec aux v =
+        match v with
+        | [] -> ()
+        | h :: t ->
+          begin
+            print_string "(";
+            print_bool (fst h); print_string ", {";
+            print_int (snd h).Variables.i; print_string ", ";
+            print_color (snd h).Variables.c; print_string "}); ";
+            print_newline ();
+            aux t
+          end in
+      aux v
+    end
+  | None -> ();;
+
+let rec print_fnc fnc =
+  match fnc with
+  | [] -> ()
+  | h::t -> print_valuation (Some h); print_fnc t;;
+
+exception No_value;;
+let get = function None -> raise No_value | Some(a) -> a;;
+
+let main () =
   let cell_width, cell_height = fst v.dim / 5, 50 in
-  open_graph (" " ^ string_of_int (fst v.dim) ^ "x" ^ string_of_int (snd v.dim + cell_height));
+  open_graph (" " ^ string_of_int (fst v.dim) ^ "x" ^
+              string_of_int (snd v.dim + cell_height));
   clear_graph ();
   auto_synchronize false;
 
@@ -181,26 +203,60 @@ let () =
   set_color black;
   fill_rect 0 (snd v.dim) (fst v.dim) 1;
 
+  let count_pre_colored cl =
+    let x = ref 0 in
+    for i = 0 to Array.length cl - 1 do
+      if cl.(i) <> None then x := !x + 1
+    done;
+    !x in
+
   let m = regions_voronoi distance v in
   let b = adjacences_voronoi v m in
   let cl = make_color_array v in
+  let fnc = produce_constraints cl b in
   let c = ref white in
+  let z = ref 0 in
+  let go_on = ref true in
+
+
+  color_from_valuation v (get (Sat.solve (fnc)));
 
   draw_voronoi v m;
   synchronize ();
-  while true do
-    let e = wait_next_event[Button_down] in
+  while !go_on do
+    let e = wait_next_event[Button_down; Key_pressed] in
     let x, y = e.mouse_x, e.mouse_y in
 
-    if y > snd v.dim + 1 then
-      c := point_color x y
-    else if y < snd v.dim then
-      let i = m.(x).(y) in
-      if cl.(i) = None then
-        begin
-          v.seeds.(i) <- {c = Some !c; x = v.seeds.(i).x; y = v.seeds.(i).y};
+    if e.keypressed && e.key = Char.chr 27 then
+      go_on := false
+    else if e.button then begin
+      if y > snd v.dim + 1 then
+        c := point_color x y
+      else if y < snd v.dim then begin
+        let i = m.(x).(y) in
+        if cl.(i) = None then begin
+          if !c <> white && v.seeds.(i).c = None then
+            z := !z + 1
+          else if !c = white && v.seeds.(i).c <> None && !z > 0 then
+            z := !z - 1;
+          v.seeds.(i) <- {c = if !c = white then None else Some !c;
+                          x = v.seeds.(i).x; y = v.seeds.(i).y};
           draw_voronoi v m;
           synchronize ()
         end
+      end;
+
+      if !z = Array.length cl - count_pre_colored cl then begin
+        let fnc' = ref fnc in
+        for i = 0 to Array.length cl - 1 do
+          if cl.(i) = None then
+            fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
+        done;
+        print_valuation (Sat.solve (!fnc'));
+        if Sat.solve (!fnc') <> None then print_string "GAGNE"; print_newline ()
+      end
+    end
   done;
   close_graph ();;
+
+main ();;
