@@ -1,0 +1,39 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{mathtools}
+
+\begin{document}
+Soit $G = (S, A)$ un graphe, $C$ l'ensemble des couleurs ($|C| := 4$). \\
+$p_{i, j}$ : la région $i \in S$ est de couleur $j \in C$.
+\begin{itemize}
+    \item Existence $\phi$ : chaque région reçoit au moins une couleur
+    \item Unicité $\varphi$ : chaque région reçoit au plus une couleur
+    \item Adjacence $\psi$ : deux régions adjacentes ne reçoivent pas la même couleur
+\end{itemize}
+Si $F = \phi \land \varphi \land \psi$ est validée par $\bar{v}$ alors $\bar{v}$
+fournit une coloration du graphe selon le théorème des quatre couleurs.
+
+$$\phi = \displaystyle\bigwedge_{i \in S}\displaystyle\bigvee_{j \in C} p_{i, j}$$
+$$\varphi
+  = \displaystyle\bigwedge_{i \in S}
+    \bigwedge_{\substack{j, j' \in C \\
+    j \neq j'}}
+    \neg(p_{i,j} \land p_{i, j'})
+  = \displaystyle\bigwedge_{i \in S}
+    \bigwedge_{\substack{j, j' \in C \\
+    j \neq j'}}
+    (\neg p_{i,j} \lor \neg p_{i, j'})$$
+$$\psi
+  = \bigwedge_{\substack{(i, i') \in A \\
+    i \neq i'}}
+    \displaystyle\bigwedge_{j \in C}
+    \neg(p_{i,j} \land p_{i', j})
+  = \bigwedge_{\substack{(i, i') \in A \\
+    i \neq i'}}
+    \displaystyle\bigwedge_{j \in C}
+    (\neg p_{i,j} \lor \neg p_{i', j})
+    $$
+\end{document}
