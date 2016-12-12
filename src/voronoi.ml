@@ -1,7 +1,3 @@
-(* https://caml.inria.fr/pub/docs/manual-ocaml/libref/Pervasives.html
- * https://caml.inria.fr/pub/docs/manual-ocaml/libref/Graphics.html
- * https://caml.inria.fr/pub/docs/manual-ocaml/libref/Array.html *)
-
 open Graphics;;
 open Examples;;
 
@@ -11,6 +7,7 @@ let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
 let taxicab2 (x1, y1) (x2, y2) = max (abs (x1 - x2)) (abs (y1 - y2));;
 let fn a b = int_of_float (sqrt ((float)(euclidean a b))) + taxicab a b;;
 let fn2 a b = taxicab a b + taxicab2 a b;;
+
 let distances = [| euclidean; taxicab; taxicab2; fn; fn2 |];;
 
 let regions_voronoi dist v =
@@ -21,11 +18,10 @@ let regions_voronoi dist v =
       let d = ref max_int in
       for s = 0 to Array.length v.seeds - 1 do
         let d' = dist (x, y) (v.seeds.(s).x, v.seeds.(s).y) in
-        if d' < !d then
-          begin
-            d := d';
-            matrix.(x).(y) <- s
-          end
+        if d' < !d then begin
+          d := d';
+          matrix.(x).(y) <- s
+        end
       done
     done
   done;
@@ -41,12 +37,11 @@ let draw_voronoi v m =
          y < height - 1 && s <> m.(x).(y + 1) ||
          x > 0 && s <> m.(x - 1).(y) then
         set_color black
-      else
-        begin
-          match v.seeds.(m.(x).(y)).c with
-          | None -> set_color white
-          | Some c -> set_color c
-        end;
+      else begin
+        match v.seeds.(m.(x).(y)).c with
+        | None -> set_color white
+        | Some c -> set_color c
+      end;
       plot x y
      done
   done;;
@@ -148,6 +143,26 @@ let rec color_from_valuation v vl =
       v.seeds.(l.Variables.i) <- {c = Some l.Variables.c; x = s.x; y = s.y};
     color_from_valuation v t;;
 
+let reset_voronoi cl v =
+  for i = 0 to Array.length cl - 1 do
+    if cl.(i) = None then
+      v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y}
+  done;;
+
+let draw_graph v b =
+  set_color black;
+  for i = 0 to Array.length b - 1 do
+    for j = 0 to Array.length b - 1 do
+      if b.(i).(j) then begin
+        moveto v.seeds.(i).x v.seeds.(i).y;
+        lineto v.seeds.(j).x v.seeds.(j).y
+      end
+    done
+  done;;
+
+exception No_value;;
+let get = function None -> raise No_value | Some(a) -> a;;
+
 let print_bool b = print_string (if b then "true" else "false");;
 
 let print_valuation v =
@@ -157,16 +172,14 @@ let print_valuation v =
       if c = red then "red" else
       if c = blue then "blue" else
       if c = yellow then "yellow" else
-      if c = green then "green" else "") in
-
+      if c = green then "green" else "")
+  in
   match v with
-  | Some v ->
-    begin
+  | Some v -> begin
       let rec aux v =
         match v with
         | [] -> ()
-        | h :: t ->
-          begin
+        | h :: t -> begin
             print_string "(";
             print_bool (fst h); print_string ", {";
             print_int (snd h).Variables.i; print_string ", ";
@@ -183,30 +196,10 @@ let rec print_fnc fnc =
   | [] -> ()
   | h::t -> print_valuation (Some h); print_fnc t;;
 
-exception No_value;;
-let get = function None -> raise No_value | Some(a) -> a;;
-
-let reset_voronoi cl v =
-  for i = 0 to Array.length cl - 1 do
-    if cl.(i) = None then
-      v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y}
-  done;;
-
 type button = {y : int; txt : string};;
 
-let draw_graph v b =
-  set_color black;
-  for i = 0 to Array.length b - 1 do
-    for j = 0 to Array.length b - 1 do
-      if b.(i).(j) then begin
-        moveto v.seeds.(i).x v.seeds.(i).y;
-        lineto v.seeds.(j).x v.seeds.(j).y
-      end
-    done
-  done;;
-
 let play v =
-  let button_width, button_height, button_x = 150, 50, fst v.dim + 5 in
+  let button_width, button_height, button_x = 150, 30, fst v.dim + 5 in
   let cell_width, cell_height = fst v.dim / 5, 50 in
   open_graph (" " ^ string_of_int (fst v.dim + button_width + 8) ^ "x" ^
               string_of_int (snd v.dim + cell_height));
@@ -229,30 +222,37 @@ let play v =
     done;
     !x in
 
-  (* Buttons *)
-  let solve_btn = {y = (snd v.dim + cell_height)/2 - button_height/2; txt = "Solution"} in
+  (* Buttons bravo/reset/solve/quit/dist *)
+  let bkgd_color, btn_color = rgb 77 114 121, rgb 8 52 60 in
+
+  let solve_btn = {y = (snd v.dim) / 2 - button_height / 2; txt = "Solution"} in
   let reset_btn = {y = solve_btn.y + button_height + 5; txt = "Nettoyer"} in
   let quit_btn = {y = solve_btn.y - button_height - 5; txt = "Quitter"} in
+  let bravo_btn = {y = reset_btn.y + button_height + 5; txt = "Bravo !"} in
+  let dist_btn = {y = quit_btn.y - button_height - 5; txt = "Distance : "} in
 
   let has_clicked b e =
     e.mouse_x >= button_x && e.mouse_x < button_x + button_width &&
     e.mouse_y >= b.y && e.mouse_y < b.y + button_height
   in
 
-  set_color (rgb 77 114 121);
+  set_color bkgd_color;
   fill_rect (fst v.dim + 1) 0 (button_width + 10) (snd v.dim + cell_height);
-  set_color black;
-  let draw_btn b =
-    draw_rect button_x b.y button_width button_height;
-    set_color (rgb 8 52 60);
-    fill_rect (button_x+1) (b.y+1) (button_width-2) (button_height-2);
+  let erase_btn b c =
+    set_color c;
+    fill_rect button_x b.y button_width button_height;
+  in
+  let draw_btn b c r =
+    erase_btn b c;
     set_color black;
-    moveto (button_x + button_width/2 - (fst (text_size b.txt))/2) (b.y + button_height/2 - (snd (text_size b.txt))/2);
+    if r then draw_rect button_x b.y button_width button_height;
+    moveto (button_x + button_width / 2 - (fst (text_size b.txt)) / 2)
+           (b.y + button_height / 2 - (snd (text_size b.txt)) / 2);
     draw_string b.txt
   in
-  draw_btn solve_btn;
-  draw_btn reset_btn;
-  draw_btn quit_btn;
+  draw_btn solve_btn btn_color true;
+  draw_btn reset_btn btn_color true;
+  draw_btn quit_btn btn_color true;
 
   let distance = ref 0 in
   let m = ref (regions_voronoi distances.(!distance) v) in
@@ -265,40 +265,26 @@ let play v =
   let graph_drawn = ref false in
 
   let draw_current_color () =
-    let x, y = (fst v.dim) + button_width / 2 + 4, (snd v.dim) + cell_height / 2 in
+    let x, y, r = (fst v.dim) + button_width / 2 + 4,
+                  (snd v.dim) + cell_height / 2,
+                  cell_height / 2 - 5 in
     set_color !c;
-    fill_circle x y 20;
+    fill_circle x y r;
     set_color black;
-    draw_circle x y 20
+    draw_circle x y r
   in
 
   let draw_distance () =
-    let txt = "Distance : " ^ string_of_int (!distance + 1) ^ "/" ^ string_of_int (Array.length distances) in
-    let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
-               (quit_btn.y / 2) + (button_height / 2) - (snd (text_size txt)) / 2  in
-    set_color (rgb 77 114 121);
-    fill_rect x y (fst (text_size txt)) (snd (text_size txt));
+    let txt = dist_btn.txt ^ string_of_int (!distance + 1) ^ "/"
+              ^ string_of_int (Array.length distances) in
+    erase_btn dist_btn bkgd_color;
     set_color black;
-    moveto x y;
-    draw_string txt;
-  in
-
-  let erase_bravo () =
-    let txt = "Bravo !" in
-    let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
-              reset_btn.y + 3 * button_height - (snd (text_size txt)) / 2 in
-    set_color (rgb 77 114 121);
-    fill_rect x y (fst (text_size txt)) (snd (text_size txt))
-  in
-
-  let draw_bravo () =
-    let txt = "Bravo !" in
-    let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
-              reset_btn.y + 3 * button_height - (snd (text_size txt)) / 2 in
-    set_color black;
-    moveto x y;
+    moveto (button_x + button_width / 2 - (fst (text_size txt)) / 2)
+           (dist_btn.y + button_height / 2 - (snd (text_size txt)) / 2);
     draw_string txt
   in
+
+  let erase_bravo () = erase_btn bravo_btn bkgd_color in
 
   draw_distance ();
   draw_current_color ();
@@ -384,7 +370,7 @@ let play v =
                 fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
             done;
             if Sat.solve (!fnc') <> None then begin
-              draw_bravo ()
+              draw_btn bravo_btn bkgd_color false
             end
           end;
           synchronize ()
