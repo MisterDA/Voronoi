@@ -194,7 +194,6 @@ let reset_voronoi cl v =
       v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y}
   done;;
 
-
 type button = {y : int; txt : string};;
 
 let main () =
@@ -248,9 +247,9 @@ let main () =
 
   let distance = ref 0 in
   let m = ref (regions_voronoi distances.(!distance) v) in
-  let b = adjacences_voronoi v !m in
+  let b = ref (adjacences_voronoi v !m) in
   let cl = make_color_array v in
-  let fnc = produce_constraints cl b in
+  let fnc = ref (produce_constraints cl !b) in
   let c = ref white in
   let z = ref 0 in
   let go_on = ref true in
@@ -264,6 +263,23 @@ let main () =
     set_color black;
     moveto x y;
     draw_string txt;
+  in
+
+  let erase_bravo () =
+    let txt = "Bravo !" in
+    let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
+              reset_btn.y + 3 * button_height - (snd (text_size txt)) / 2 in
+    set_color (rgb 77 114 121);
+    fill_rect x y (fst (text_size txt)) (snd (text_size txt))
+  in
+
+  let draw_bravo () =
+    let txt = "Bravo !" in
+    let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
+              reset_btn.y + 3 * button_height - (snd (text_size txt)) / 2 in
+    set_color black;
+    moveto x y;
+    draw_string txt
   in
 
   draw_distance ();
@@ -280,14 +296,24 @@ let main () =
               compare e.key (char_of_int (int_of_char '0' + Array.length distances)) <= 0 then begin
         distance := int_of_char e.key - int_of_char '0' - 1;
         m := regions_voronoi distances.(!distance) v;
+        b := adjacences_voronoi v !m;
+        fnc := produce_constraints cl !b;
+        reset_voronoi cl v;
+        erase_bravo ();
         draw_distance ();
         draw_voronoi v !m;
         synchronize ()
       end
+(*
+      else if compare e.key 'a' >= 0 &&
+              compare e.key (char_of_int (int_of_char 'a' + List.length voronois)) <= 0 then begin
+        i := int_of_char
+              end
+*)
     end
     else if e.button then begin
       if has_clicked solve_btn e then begin
-        let fnc' = ref fnc in
+        let fnc' = ref !fnc in
         for i = 0 to Array.length v.seeds - 1 do
           if v.seeds.(i).c <> None then
             fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
@@ -304,6 +330,7 @@ let main () =
         reset_voronoi cl v;
         z := 0;
         draw_voronoi v !m;
+        erase_bravo ();
         synchronize ()
       end
       else if has_clicked quit_btn e then
@@ -320,28 +347,18 @@ let main () =
           v.seeds.(i) <- {c = if !c = white then None else Some !c;
                           x = v.seeds.(i).x; y = v.seeds.(i).y};
           draw_voronoi v !m;
-          synchronize ();
 
           if !z = Array.length cl - count_pre_colored cl then begin
-            let fnc' = ref fnc in
+            let fnc' = ref !fnc in
             for i = 0 to Array.length cl - 1 do
               if cl.(i) = None then
                 fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
             done;
             if Sat.solve (!fnc') <> None then begin
-              print_valuation (Sat.solve (!fnc'));
-              let txt = "Bravo !" in
-              let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
-                         reset_btn.y + 3 * button_height - (snd (text_size txt)) / 2  in
-              print_int x; print_string " "; print_int y; print_newline ();
-              set_color (rgb 77 114 121);
-              fill_rect x y (fst (text_size txt)) (snd (text_size txt));
-              set_color black;
-              moveto x y;
-              draw_string txt;
-              synchronize ()
+              draw_bravo ()
             end
-          end
+          end;
+          synchronize ()
         end
       end
     end
