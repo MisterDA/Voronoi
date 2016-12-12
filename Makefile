@@ -1,21 +1,23 @@
-all:
+all: build
+
+build:
 	ocamlbuild -pkg graphics voronoi.native -I src
 
-dist: report clean
-	base=$$(basename "$${PWD}") && name='decimo-zibulski' && \
-	cd .. && mv "$${base}" "$${name}" && \
-	tar --exclude-vcs -czvf "$${name}.tar.gz" --exclude-vcs-ignores "$${name}" && \
-	mv "$${name}" "$${base}"
+rapport: build
+	ocamldoc -latex -charset "utf-8" -noheader -notoc -notrailer \
+	-colorize-code -o rapport/ocamldoc.tex -d rapport -I _build/src \
+		src/voronoi.ml
+	pdflatex -output-format pdf -output-directory rapport rapport/rapport.tex
 
-report:
-	cd 'report' && pdflatex 'report.tex'
-
-doc: all
-	mkdir -p doc
-	ocamldoc -html -charset "utf-8" -colorize-code -d doc -I _build/src src/voronoi.ml
+dist: rapport
+	base=$$(basename "$${PWD}") && name='decimo-zibulski' && cd .. && \
+	tar -c --exclude-vcs --exclude-vcs-ignores -zvf "$${name}.tar.gz" \
+		--transform="s,^$${base},$${name},g" --show-transformed-names \
+		--exclude="_build" --exclude='ocamldoc.*' --exclude-caches \
+		"$${base}"
 
 clean:
 	ocamlbuild -clean
-	rm -rf report/*.aux report/*.log doc
+	rm -rf rapport/*.aux rapport/*.log rapport/ocamldoc.*
 
-.PHONY: dist clean report
+.PHONY: build dist rapport clean
