@@ -195,10 +195,10 @@ let reset_voronoi cl v =
   done;;
 
 
-type button = {x : int; y : int; txt : string};;
+type button = {y : int; txt : string};;
 
 let main () =
-  let button_width, button_height = 150, 50 in
+  let button_width, button_height, button_x = 150, 50, fst v.dim + 5 in
   let cell_width, cell_height = fst v.dim / 5, 50 in
   open_graph (" " ^ string_of_int (fst v.dim + button_width + 8) ^ "x" ^
               string_of_int (snd v.dim + cell_height));
@@ -222,12 +222,12 @@ let main () =
     !x in
 
   (* Buttons *)
-  let solve_btn = {x = fst v.dim + 5; y = (snd v.dim + cell_height)/2 - button_height/2; txt = "Solution"} in
-  let reset_btn = {x = fst v.dim + 5; y = solve_btn.y + button_height + 5; txt = "Nettoyer"} in
-  let quit_btn = {x = fst v.dim + 5; y = solve_btn.y - button_height - 5; txt = "Quitter"} in
+  let solve_btn = {y = (snd v.dim + cell_height)/2 - button_height/2; txt = "Solution"} in
+  let reset_btn = {y = solve_btn.y + button_height + 5; txt = "Nettoyer"} in
+  let quit_btn = {y = solve_btn.y - button_height - 5; txt = "Quitter"} in
 
   let has_clicked b e =
-    e.mouse_x >= b.x && e.mouse_x < b.x + button_width &&
+    e.mouse_x >= button_x && e.mouse_x < button_x + button_width &&
     e.mouse_y >= b.y && e.mouse_y < b.y + button_height
   in
 
@@ -235,43 +235,60 @@ let main () =
   fill_rect (fst v.dim + 1) 0 (button_width + 10) (snd v.dim + cell_height);
   set_color black;
   let draw_btn b =
-    draw_rect b.x b.y button_width button_height;
+    draw_rect button_x b.y button_width button_height;
     set_color (rgb 8 52 60);
-    fill_rect (b.x+1) (b.y+1) (button_width-2) (button_height-2);
+    fill_rect (button_x+1) (b.y+1) (button_width-2) (button_height-2);
     set_color black;
-    moveto (b.x + button_width/2 - (fst (text_size b.txt))/2) (b.y + button_height/2 - (snd (text_size b.txt))/2);
+    moveto (button_x + button_width/2 - (fst (text_size b.txt))/2) (b.y + button_height/2 - (snd (text_size b.txt))/2);
     draw_string b.txt
   in
   draw_btn solve_btn;
   draw_btn reset_btn;
   draw_btn quit_btn;
 
-  let m = regions_voronoi distances.(0) v in
-  let b = adjacences_voronoi v m in
+  let distance = ref 0 in
+  let m = ref (regions_voronoi distances.(!distance) v) in
+  let b = adjacences_voronoi v !m in
   let cl = make_color_array v in
   let fnc = produce_constraints cl b in
   let c = ref white in
   let z = ref 0 in
   let go_on = ref true in
 
-  draw_voronoi v m;
+  draw_voronoi v !m;
   synchronize ();
   while !go_on do
     let e = wait_next_event[Button_down; Key_pressed] in
     let x, y = e.mouse_x, e.mouse_y in
 
-    if e.keypressed && e.key = Char.chr 27 then
-      go_on := false
+    if e.keypressed then begin
+      if e.key = Char.chr 27 then
+        go_on := false
+      else if compare e.key '1' >= 0 &&
+              compare e.key (char_of_int (int_of_char '0' + Array.length distances)) <= 0 then begin
+        distance := int_of_char e.key - int_of_char '0' - 1;
+        m := regions_voronoi distances.(!distance) v;
+        let txt = "Distance: " ^ string_of_int (!distance + 1) ^ "/" ^ string_of_int (Array.length distances) in
+        let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
+                   quit_btn.y / 2 + button_height / 2 - (snd (text_size txt)) / 2 in
+        set_color (rgb 77 114 121);
+        fill_rect x y (fst (text_size txt)) (snd (text_size txt));
+        set_color black;
+        moveto x y; draw_string txt;
+        draw_voronoi v !m;
+        synchronize ()
+      end
+    end
     else if e.button then begin
       if has_clicked solve_btn e then begin
         color_from_valuation v (get (Sat.solve (fnc)));
-        draw_voronoi v m;
         z := Array.length cl - count_pre_colored cl;
+        draw_voronoi v !m;
         synchronize ()
       end
       else if has_clicked reset_btn e then begin
         reset_voronoi cl v;
-        draw_voronoi v m;
+        draw_voronoi v !m;
         synchronize ()
       end
       else if has_clicked quit_btn e then
@@ -279,7 +296,7 @@ let main () =
       else if x < fst v.dim && y > snd v.dim + 1 then
         c := point_color x y
       else if x < fst v.dim && y < snd v.dim then begin
-        let i = m.(x).(y) in
+        let i = !m.(x).(y) in
         if cl.(i) = None then begin
           if !c <> white && v.seeds.(i).c = None then
             z := !z + 1
@@ -287,7 +304,7 @@ let main () =
             z := !z - 1;
           v.seeds.(i) <- {c = if !c = white then None else Some !c;
                           x = v.seeds.(i).x; y = v.seeds.(i).y};
-          draw_voronoi v m;
+          draw_voronoi v !m;
           synchronize ();
 
           if !z = Array.length cl - count_pre_colored cl then begin
