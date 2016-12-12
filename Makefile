@@ -10,8 +10,12 @@ dist: report clean
 report:
 	cd 'report' && pdflatex 'report.tex'
 
+doc: all
+	mkdir -p doc
+	ocamldoc -html -charset "utf-8" -colorize-code -d doc -I _build/src src/voronoi.ml
+
 clean:
 	ocamlbuild -clean
-	rm -rf report/*.aux report/*.log
+	rm -rf report/*.aux report/*.log doc
 
 .PHONY: dist clean report

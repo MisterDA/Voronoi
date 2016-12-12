@@ -1,3 +1,4 @@
+doc
 
 # Created by https://www.gitignore.io/api/ocaml,linux,latex
 
@@ -240,5 +241,5 @@ TSWLatexianTemp*
 # KBibTeX
 *~[0-9]*
 
-# auto folder when using emacs and auctex 
+# auto folder when using emacs and auctex
 /auto/*
