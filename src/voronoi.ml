@@ -5,7 +5,7 @@
 open Graphics;;
 open Examples;;
 
-let v = v4;;
+let v = v2;;
 
 let euclidean (x1, y1) (x2, y2) =
   int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
@@ -13,7 +13,7 @@ let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
 let taxicab2 (x1, y1) (x2, y2) = max (abs (x1 - x2)) (abs (y1 - y2));;
 let fn a b = int_of_float (sqrt ((float)(euclidean a b))) + taxicab a b;;
 let fn2 a b = taxicab a b + taxicab2 a b;;
-let distance = taxicab;;
+let distances = [| euclidean; taxicab; taxicab2; fn; fn2 |];;
 
 let regions_voronoi dist v =
   let width, height = v.dim in
@@ -188,9 +188,19 @@ let rec print_fnc fnc =
 exception No_value;;
 let get = function None -> raise No_value | Some(a) -> a;;
 
+let reset_voronoi cl v =
+  for i = 0 to Array.length cl - 1 do
+    if cl.(i) = None then
+      v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y}
+  done;;
+
+
+type button = {x : int; y : int; txt : string};;
+
 let main () =
+  let button_width, button_height = 150, 50 in
   let cell_width, cell_height = fst v.dim / 5, 50 in
-  open_graph (" " ^ string_of_int (fst v.dim) ^ "x" ^
+  open_graph (" " ^ string_of_int (fst v.dim + button_width + 8) ^ "x" ^
               string_of_int (snd v.dim + cell_height));
   clear_graph ();
   auto_synchronize false;
@@ -202,6 +212,7 @@ let main () =
   done;
   set_color black;
   fill_rect 0 (snd v.dim) (fst v.dim) 1;
+  fill_rect (fst v.dim) 0 1 (snd v.dim + cell_height);
 
   let count_pre_colored cl =
     let x = ref 0 in
@@ -210,16 +221,38 @@ let main () =
     done;
     !x in
 
-  let m = regions_voronoi distance v in
+  (* Buttons *)
+  let solve_btn = {x = fst v.dim + 5; y = (snd v.dim + cell_height)/2 - button_height/2; txt = "Solution"} in
+  let reset_btn = {x = fst v.dim + 5; y = solve_btn.y + button_height + 5; txt = "Nettoyer"} in
+  let quit_btn = {x = fst v.dim + 5; y = solve_btn.y - button_height - 5; txt = "Quitter"} in
+
+  let has_clicked b e =
+    e.mouse_x >= b.x && e.mouse_x < b.x + button_width &&
+    e.mouse_y >= b.y && e.mouse_y < b.y + button_height
+  in
+
+  set_color (rgb 77 114 121);
+  fill_rect (fst v.dim + 1) 0 (button_width + 10) (snd v.dim + cell_height);
+  set_color black;
+  let draw_btn b =
+    draw_rect b.x b.y button_width button_height;
+    set_color (rgb 8 52 60);
+    fill_rect (b.x+1) (b.y+1) (button_width-2) (button_height-2);
+    set_color black;
+    moveto (b.x + button_width/2 - (fst (text_size b.txt))/2) (b.y + button_height/2 - (snd (text_size b.txt))/2);
+    draw_string b.txt
+  in
+  draw_btn solve_btn;
+  draw_btn reset_btn;
+  draw_btn quit_btn;
+
+  let m = regions_voronoi distances.(0) v in
   let b = adjacences_voronoi v m in
   let cl = make_color_array v in
   let fnc = produce_constraints cl b in
   let c = ref white in
   let z = ref 0 in
   let go_on = ref true in
-
-
-  color_from_valuation v (get (Sat.solve (fnc)));
 
   draw_voronoi v m;
   synchronize ();
@@ -230,9 +263,22 @@ let main () =
     if e.keypressed && e.key = Char.chr 27 then
       go_on := false
     else if e.button then begin
-      if y > snd v.dim + 1 then
+      if has_clicked solve_btn e then begin
+        color_from_valuation v (get (Sat.solve (fnc)));
+        draw_voronoi v m;
+        z := Array.length cl - count_pre_colored cl;
+        synchronize ()
+      end
+      else if has_clicked reset_btn e then begin
+        reset_voronoi cl v;
+        draw_voronoi v m;
+        synchronize ()
+      end
+      else if has_clicked quit_btn e then
+        go_on := false
+      else if x < fst v.dim && y > snd v.dim + 1 then
         c := point_color x y
-      else if y < snd v.dim then begin
+      else if x < fst v.dim && y < snd v.dim then begin
         let i = m.(x).(y) in
         if cl.(i) = None then begin
           if !c <> white && v.seeds.(i).c = None then
@@ -242,18 +288,18 @@ let main () =
           v.seeds.(i) <- {c = if !c = white then None else Some !c;
                           x = v.seeds.(i).x; y = v.seeds.(i).y};
           draw_voronoi v m;
-          synchronize ()
-        end
-      end;
+          synchronize ();
 
-      if !z = Array.length cl - count_pre_colored cl then begin
-        let fnc' = ref fnc in
-        for i = 0 to Array.length cl - 1 do
-          if cl.(i) = None then
-            fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
-        done;
-        print_valuation (Sat.solve (!fnc'));
-        if Sat.solve (!fnc') <> None then print_string "GAGNE"; print_newline ()
+          if !z = Array.length cl - count_pre_colored cl then begin
+            let fnc' = ref fnc in
+            for i = 0 to Array.length cl - 1 do
+              if cl.(i) = None then
+                fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
+            done;
+            print_valuation (Sat.solve (!fnc'));
+            if Sat.solve (!fnc') <> None then print_string "GAGNE"; print_newline ()
+          end
+        end
       end
     end
   done;
