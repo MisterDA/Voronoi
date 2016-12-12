@@ -255,6 +255,18 @@ let main () =
   let z = ref 0 in
   let go_on = ref true in
 
+  let draw_distance () =
+    let txt = "Distance : " ^ string_of_int (!distance + 1) ^ "/" ^ string_of_int (Array.length distances) in
+    let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
+               (quit_btn.y / 2) + (button_height / 2) - (snd (text_size txt)) / 2  in
+    set_color (rgb 77 114 121);
+    fill_rect x y (fst (text_size txt)) (snd (text_size txt));
+    set_color black;
+    moveto x y;
+    draw_string txt;
+  in
+
+  draw_distance ();
   draw_voronoi v !m;
   synchronize ();
   while !go_on do
@@ -268,26 +280,29 @@ let main () =
               compare e.key (char_of_int (int_of_char '0' + Array.length distances)) <= 0 then begin
         distance := int_of_char e.key - int_of_char '0' - 1;
         m := regions_voronoi distances.(!distance) v;
-        let txt = "Distance: " ^ string_of_int (!distance + 1) ^ "/" ^ string_of_int (Array.length distances) in
-        let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
-                   quit_btn.y / 2 + button_height / 2 - (snd (text_size txt)) / 2 in
-        set_color (rgb 77 114 121);
-        fill_rect x y (fst (text_size txt)) (snd (text_size txt));
-        set_color black;
-        moveto x y; draw_string txt;
+        draw_distance ();
         draw_voronoi v !m;
         synchronize ()
       end
     end
     else if e.button then begin
       if has_clicked solve_btn e then begin
-        color_from_valuation v (get (Sat.solve (fnc)));
-        z := Array.length cl - count_pre_colored cl;
+        let fnc' = ref fnc in
+        for i = 0 to Array.length v.seeds - 1 do
+          if v.seeds.(i).c <> None then
+            fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
+        done;
+        let valuation = Sat.solve (!fnc') in
+        if valuation <> None then begin
+          color_from_valuation v (get valuation);
+          z := Array.length cl - count_pre_colored cl
+        end;
         draw_voronoi v !m;
         synchronize ()
       end
       else if has_clicked reset_btn e then begin
         reset_voronoi cl v;
+        z := 0;
         draw_voronoi v !m;
         synchronize ()
       end
@@ -313,8 +328,19 @@ let main () =
               if cl.(i) = None then
                 fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
             done;
-            print_valuation (Sat.solve (!fnc'));
-            if Sat.solve (!fnc') <> None then print_string "GAGNE"; print_newline ()
+            if Sat.solve (!fnc') <> None then begin
+              print_valuation (Sat.solve (!fnc'));
+              let txt = "Bravo !" in
+              let x, y = button_x + button_width / 2 - (fst (text_size txt)) / 2,
+                         reset_btn.y + 3 * button_height - (snd (text_size txt)) / 2  in
+              print_int x; print_string " "; print_int y; print_newline ();
+              set_color (rgb 77 114 121);
+              fill_rect x y (fst (text_size txt)) (snd (text_size txt));
+              set_color black;
+              moveto x y;
+              draw_string txt;
+              synchronize ()
+            end
           end
         end
       end
