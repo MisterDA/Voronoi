@@ -5,8 +5,6 @@
 open Graphics;;
 open Examples;;
 
-let v = v2;;
-
 let euclidean (x1, y1) (x2, y2) =
   int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
 let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
@@ -196,7 +194,18 @@ let reset_voronoi cl v =
 
 type button = {y : int; txt : string};;
 
-let main () =
+let draw_graph v b =
+  set_color black;
+  for i = 0 to Array.length b - 1 do
+    for j = 0 to Array.length b - 1 do
+      if b.(i).(j) then begin
+        moveto v.seeds.(i).x v.seeds.(i).y;
+        lineto v.seeds.(j).x v.seeds.(j).y
+      end
+    done
+  done;;
+
+let play v =
   let button_width, button_height, button_x = 150, 50, fst v.dim + 5 in
   let cell_width, cell_height = fst v.dim / 5, 50 in
   open_graph (" " ^ string_of_int (fst v.dim + button_width + 8) ^ "x" ^
@@ -253,6 +262,15 @@ let main () =
   let c = ref white in
   let z = ref 0 in
   let go_on = ref true in
+  let graph_drawn = ref false in
+
+  let draw_current_color () =
+    let x, y = (fst v.dim) + button_width / 2 + 4, (snd v.dim) + cell_height / 2 in
+    set_color !c;
+    fill_circle x y 20;
+    set_color black;
+    draw_circle x y 20
+  in
 
   let draw_distance () =
     let txt = "Distance : " ^ string_of_int (!distance + 1) ^ "/" ^ string_of_int (Array.length distances) in
@@ -283,6 +301,7 @@ let main () =
   in
 
   draw_distance ();
+  draw_current_color ();
   draw_voronoi v !m;
   synchronize ();
   while !go_on do
@@ -298,10 +317,17 @@ let main () =
         m := regions_voronoi distances.(!distance) v;
         b := adjacences_voronoi v !m;
         fnc := produce_constraints cl !b;
+        if !graph_drawn then (draw_graph v !b; synchronize ());
         reset_voronoi cl v;
         erase_bravo ();
         draw_distance ();
         draw_voronoi v !m;
+        z := 0;
+        synchronize ()
+      end
+      else if e.key = 'g' then begin
+        graph_drawn := if !graph_drawn then false else true;
+        if !graph_drawn then draw_graph v !b else draw_voronoi v !m;
         synchronize ()
       end
 (*
@@ -335,8 +361,11 @@ let main () =
       end
       else if has_clicked quit_btn e then
         go_on := false
-      else if x < fst v.dim && y > snd v.dim + 1 then
-        c := point_color x y
+      else if x < fst v.dim && y > snd v.dim + 1 then begin
+        c := point_color x y;
+        draw_current_color ();
+        synchronize ()
+      end
       else if x < fst v.dim && y < snd v.dim then begin
         let i = !m.(x).(y) in
         if cl.(i) = None then begin
@@ -361,8 +390,17 @@ let main () =
           synchronize ()
         end
       end
-    end
+    end;
+    if !graph_drawn then (draw_graph v !b; synchronize ())
   done;
   close_graph ();;
+
+let main () =
+  let rec aux l =
+    match l with
+    | [] -> ()
+    | v :: t -> play v; aux t
+  in
+  aux voronois;;
 
 main ();;
