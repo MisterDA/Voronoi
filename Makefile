@@ -1,7 +1,7 @@
 all: build
 
 build:
-	ocamlbuild -pkg graphics voronoi.native -I src
+	ocamlbuild -pkg graphics project.native -I src
 
 rapport: build
 	ocamldoc -latex -charset "utf-8" -noheader -notoc -notrailer \
