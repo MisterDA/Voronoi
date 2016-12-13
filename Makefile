@@ -6,7 +6,7 @@ build:
 rapport: build
 	ocamldoc -latex -charset "utf-8" -noheader -notoc -notrailer \
 	-colorize-code -o rapport/ocamldoc.tex -d rapport -I _build/src \
-		src/voronoi.ml
+		src/voronoi.ml src/project.ml
 	pdflatex -output-format pdf -output-directory rapport rapport/rapport.tex
 
 dist: rapport
