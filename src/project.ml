@@ -202,10 +202,7 @@ type button = {y : int; txt : string};;
 let play v =
   let button_width, button_height, button_x = 150, 30, fst v.dim + 5 in
   let cell_width, cell_height = fst v.dim / 5, 50 in
-  open_graph (" " ^ string_of_int (fst v.dim + button_width + 8) ^ "x" ^
-              string_of_int (snd v.dim + cell_height));
-  clear_graph ();
-  auto_synchronize false;
+  resize_window (fst v.dim + button_width + 8) (snd v.dim + cell_height);
 
   let colors = [| white; red; green; blue; yellow |] in
   for i = 0 to Array.length colors - 1 do
@@ -379,8 +376,7 @@ let play v =
       end
     end;
     if !graph_drawn then (draw_graph v !b; synchronize ())
-  done;
-  close_graph ();;
+  done;;
 
 let main () =
   let rec aux l =
@@ -388,6 +384,10 @@ let main () =
     | [] -> ()
     | v :: t -> play v; aux t
   in
-  aux voronois;;
+  open_graph (" 1x1");
+  clear_graph ();
+  auto_synchronize false;
+  aux voronois;
+  close_graph ();;
 
 main ();;
