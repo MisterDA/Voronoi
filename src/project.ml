@@ -198,6 +198,7 @@ let rec print_fnc fnc =
   | h::t -> print_valuation (Some h); print_fnc t;;
 
 type button = {y : int; txt : string};;
+type game_state = Play | Next | Quit;;
 
 let play v =
   let button_width, button_height, button_x = 150, 30, fst v.dim + 5 in
@@ -223,11 +224,13 @@ let play v =
   (* Buttons bravo/reset/solve/quit/dist *)
   let bkgd_color, btn_color = rgb 77 114 121, rgb 8 52 60 in
 
-  let solve_btn = {y = (snd v.dim) / 2 - button_height / 2; txt = "Solution"} in
-  let reset_btn = {y = solve_btn.y + button_height + 5; txt = "Nettoyer"} in
-  let quit_btn = {y = solve_btn.y - button_height - 5; txt = "Quitter"} in
-  let bravo_btn = {y = reset_btn.y + button_height + 5; txt = "Bravo !"} in
-  let dist_btn = {y = quit_btn.y - button_height - 5; txt = "Distance : "} in
+  let solve_btn = {y = (snd v.dim) / 2 - 2; txt = "Solution"} in
+
+  let reset_btn = {y = solve_btn.y + button_height + 4; txt = "Nettoyer"} in
+  let next_btn  = {y = solve_btn.y - button_height - 4; txt = "Next"} in
+  let quit_btn  = {y = next_btn.y  - button_height - 4; txt = "Quitter"} in
+  let dist_btn  = {y = quit_btn.y  - button_height - 4; txt = "Distance : "} in
+  let bravo_btn = {y = reset_btn.y + button_height + 4; txt = "Bravo !"} in
 
   let has_clicked b e =
     e.mouse_x >= button_x && e.mouse_x < button_x + button_width &&
@@ -250,7 +253,8 @@ let play v =
   in
   draw_btn solve_btn btn_color true;
   draw_btn reset_btn btn_color true;
-  draw_btn quit_btn btn_color true;
+  draw_btn next_btn  btn_color true;
+  draw_btn quit_btn  btn_color true;
 
   let distance = ref 0 in
   let m = ref (regions_voronoi distances.(!distance) v) in
@@ -259,8 +263,8 @@ let play v =
   let fnc = ref (produce_constraints cl !b) in
   let c = ref white in
   let z = ref 0 in
-  let go_on = ref true in
   let graph_drawn = ref false in
+  let state = ref Play in
 
   let draw_current_color () =
     let x, y, r = (fst v.dim) + button_width / 2 + 4,
@@ -288,13 +292,13 @@ let play v =
   draw_current_color ();
   draw_voronoi v !m;
   synchronize ();
-  while !go_on do
+  while !state = Play do
     let e = wait_next_event[Button_down; Key_pressed] in
     let x, y = e.mouse_x, e.mouse_y in
 
     if e.keypressed then begin
       if e.key = Char.chr 27 then
-        go_on := false
+        state := Quit
       else if compare e.key '1' >= 0 &&
               compare e.key (char_of_int (int_of_char '0' + Array.length distances)) <= 0 then begin
         distance := int_of_char e.key - int_of_char '0' - 1;
@@ -344,7 +348,9 @@ let play v =
         synchronize ()
       end
       else if has_clicked quit_btn e then
-        go_on := false
+        state := Quit
+      else if has_clicked next_btn e then
+        state := Next
       else if x < fst v.dim && y > snd v.dim + 1 then begin
         c := point_color x y;
         draw_current_color ();
@@ -376,13 +382,14 @@ let play v =
       end
     end;
     if !graph_drawn then (draw_graph v !b; synchronize ())
-  done;;
+  done;
+  !state;;
 
 let main () =
   let rec aux l =
     match l with
     | [] -> ()
-    | v :: t -> play v; aux t
+    | v :: t -> if play v = Next then aux t else ()
   in
   open_graph (" 1x1");
   clear_graph ();
