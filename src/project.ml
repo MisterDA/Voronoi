@@ -2,6 +2,20 @@ open Graphics;;
 open Voronoi;;
 open Examples;;
 
+let set_color c =
+  if c = white then
+    set_color (rgb 246 247 189)
+  else if c = red then
+    set_color (rgb 191 77 40)
+  else if c = yellow then
+    set_color (rgb 230 172 39)
+  else if c = blue then
+    set_color (rgb 128 188 163)
+  else if c = green then
+    set_color (rgb 101 86 67)
+  else
+    set_color c;;
+
 let euclidean (x1, y1) (x2, y2) =
   int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
 let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
@@ -37,7 +51,7 @@ let draw_voronoi v m =
          x < width - 1 && s <> m.(x + 1).(y) ||
          y < height - 1 && s <> m.(x).(y + 1) ||
          x > 0 && s <> m.(x - 1).(y) then
-        set_color black
+        Graphics.set_color white
       else begin
         match v.seeds.(m.(x).(y)).c with
         | None -> set_color white
@@ -222,7 +236,7 @@ let play v =
     !x in
 
   (* Buttons bravo/reset/solve/quit/dist *)
-  let bkgd_color, btn_color = rgb 77 114 121, rgb 8 52 60 in
+  let bkgd_color, btn_color = rgb 197 188 142, rgb 105 103 88 in
 
   let solve_btn = {y = (snd v.dim) / 2 - 2; txt = "Solution"} in
 
