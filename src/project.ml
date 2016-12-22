@@ -2,6 +2,9 @@ open Graphics;;
 open Voronoi;;
 open Examples;;
 
+exception No_value;;
+let get = function None -> raise No_value | Some(a) -> a;;
+
 let set_color c =
   if c = white then
     set_color (rgb 246 247 189)
@@ -31,13 +34,13 @@ let regions_voronoi dist v =
   for x = 0 to width - 1 do
     for y = 0 to height - 1 do
       let d = ref max_int in
-      for s = 0 to Array.length v.seeds - 1 do
-        let d' = dist (x, y) (v.seeds.(s).x, v.seeds.(s).y) in
-        if d' < !d then begin
-          d := d';
-          matrix.(x).(y) <- s
-        end
-      done
+      Array.iteri (fun i s ->
+          let d' = dist (x, y) (s.x, s.y) in
+          if d' < !d then begin
+            d := d';
+            matrix.(x).(y) <- i
+          end
+        ) v.seeds
     done
   done;
   matrix;;
@@ -94,13 +97,28 @@ module Sat = Sat_solver.Make(Variables);;
 
 let make_color_array v =
   let cl = Array.make (Array.length v.seeds) None in
-  for i = 0 to Array.length v.seeds - 1 do
-    cl.(i) <- v.seeds.(i).c
-  done;
+  Array.iteri (fun i s -> cl.(i) <- s.c) v.seeds;
   cl;;
 
+let count_pre_colored cl =
+  let count = ref 0 in
+  Array.iter (fun c -> if c <> None then count := !count + 1) cl;
+  !count;;
+
+let get_colors cl =
+  let colors = ref (Array.make 0 0) in
+  Array.iter (fun c ->
+      if c <> None then
+        let c = get c in
+        let ok = ref true in
+        Array.iter (fun c' -> if c = c' then ok := false) !colors;
+        if !ok then colors := Array.append !colors [| c |]
+    ) cl;
+  !colors
+;;
+
 let produce_constraints cl b =
-  let colors = [| red; blue; green; yellow |] in
+  let colors = get_colors cl in
 
   let exists fnc =
     for i = 0 to Array.length b - 1 do
@@ -175,9 +193,6 @@ let draw_graph v b =
     done
   done;;
 
-exception No_value;;
-let get = function None -> raise No_value | Some(a) -> a;;
-
 let print_bool b = print_string (if b then "true" else "false");;
 
 let print_valuation v =
@@ -211,100 +226,134 @@ let rec print_fnc fnc =
   | [] -> ()
   | h::t -> print_valuation (Some h); print_fnc t;;
 
-type button = {y : int; txt : string};;
-type game_state = Play | Next | Quit;;
+type cell = {x : int; y : int; w : int; h : int; c : color};;
+type button = {x : int; y : int; w : int; h : int; txt : string};;
+type game_state = Play | Previous | Next | Quit;;
 
-let play v =
-  let button_width, button_height, button_x = 150, 30, fst v.dim + 5 in
-  let cell_width, cell_height = fst v.dim / 5, 50 in
-  resize_window (fst v.dim + button_width + 8) (snd v.dim + cell_height);
+let play v has_prev has_next =
+  (* Window setup *)
+  let voronoi_width, voronoi_height = v.dim in
+  let margin_right, margin_top = 150, 50 in
+  resize_window (voronoi_width + margin_right) (voronoi_height + margin_top);
 
-  let colors = [| white; red; green; blue; yellow |] in
-  for i = 0 to Array.length colors - 1 do
-    set_color colors.(i);
-    fill_rect (i * cell_width) (snd v.dim) cell_width cell_height
-  done;
-  set_color black;
-  fill_rect 0 (snd v.dim) (fst v.dim) 1;
-  fill_rect (fst v.dim) 0 1 (snd v.dim + cell_height);
-
-  let count_pre_colored cl =
-    let x = ref 0 in
-    for i = 0 to Array.length cl - 1 do
-      if cl.(i) <> None then x := !x + 1
-    done;
-    !x in
-
-  (* Buttons bravo/reset/solve/quit/dist *)
-  let bkgd_color, btn_color = rgb 197 188 142, rgb 105 103 88 in
-
-  let solve_btn = {y = (snd v.dim) / 2 - 2; txt = "Solution"} in
-
-  let reset_btn = {y = solve_btn.y + button_height + 4; txt = "Nettoyer"} in
-  let next_btn  = {y = solve_btn.y - button_height - 4; txt = "Next"} in
-  let quit_btn  = {y = next_btn.y  - button_height - 4; txt = "Quitter"} in
-  let dist_btn  = {y = quit_btn.y  - button_height - 4; txt = "Distance : "} in
-  let bravo_btn = {y = reset_btn.y + button_height + 4; txt = "Bravo !"} in
-
-  let has_clicked b e =
-    e.mouse_x >= button_x && e.mouse_x < button_x + button_width &&
-    e.mouse_y >= b.y && e.mouse_y < b.y + button_height
-  in
-
-  set_color bkgd_color;
-  fill_rect (fst v.dim + 1) 0 (button_width + 10) (snd v.dim + cell_height);
-  let erase_btn b c =
-    set_color c;
-    fill_rect button_x b.y button_width button_height;
-  in
-  let draw_btn b c r =
-    erase_btn b c;
-    set_color black;
-    if r then draw_rect button_x b.y button_width button_height;
-    moveto (button_x + button_width / 2 - (fst (text_size b.txt)) / 2)
-           (b.y + button_height / 2 - (snd (text_size b.txt)) / 2);
-    draw_string b.txt
-  in
-  draw_btn solve_btn btn_color true;
-  draw_btn reset_btn btn_color true;
-  draw_btn next_btn  btn_color true;
-  draw_btn quit_btn  btn_color true;
-
+  (* Voronoï *)
   let distance = ref 0 in
   let m = ref (regions_voronoi distances.(!distance) v) in
   let b = ref (adjacences_voronoi v !m) in
   let cl = make_color_array v in
+  let ncl = count_pre_colored cl in
   let fnc = ref (produce_constraints cl !b) in
   let c = ref white in
   let z = ref 0 in
   let graph_drawn = ref false in
   let state = ref Play in
+  draw_voronoi v !m;
 
-  let draw_current_color () =
-    let x, y, r = (fst v.dim) + button_width / 2 + 4,
-                  (snd v.dim) + cell_height / 2,
-                  cell_height / 2 - 5 in
+  (* Color cells *)
+  let colors = get_colors cl in
+  let cell_width = voronoi_width / (Array.length colors + 1) in
+  set_color white;
+  fill_rect 0 voronoi_height cell_width margin_top;
+  Array.iteri (fun i c ->
+      set_color c;
+      fill_rect ((i+1) * cell_width) voronoi_height cell_width margin_top
+    ) colors;
+  Graphics.set_color black;
+  moveto 0 voronoi_height;
+  lineto voronoi_width voronoi_height;
+
+  (* Draw right background *)
+  let bkgd_color = rgb 197 188 142 in
+  Graphics.set_color bkgd_color;
+  fill_rect voronoi_width 0 margin_right (voronoi_height + margin_top);
+  Graphics.set_color black;
+  moveto voronoi_width 0;
+  lineto voronoi_width (voronoi_height + margin_top);
+
+  (* Buttons *)
+  let btn_color = rgb 105 103 88 in
+  let btn_margin_x, btn_margin_y = 10, 6 in
+  let btn_width, btn_height = margin_right - btn_margin_x, 25 in
+  let btn_x = voronoi_width + btn_margin_x / 2 in
+
+  (* bravo/reset/solve/{prev,next}/quit/dist *)
+  let solve_btn = {x = btn_x; y = voronoi_height / 2 - btn_margin_y / 2;
+                   w = btn_width; h = btn_height;
+                   txt = "Solution"} in
+  let reset_btn = {x = btn_x; y = solve_btn.y + btn_height + btn_margin_y / 2;
+                   w = btn_width; h = btn_height;
+                   txt = "Nettoyer"} in
+  let bravo_btn = {x = btn_x; y = reset_btn.y + btn_height + btn_margin_y / 2;
+                   w = btn_width; h = btn_height;
+                   txt = "Bravo !"} in
+  let prev_btn = {x = btn_x; y = solve_btn.y - btn_height - btn_margin_y / 2;
+                  w = btn_width / 2 - btn_margin_x / 4; h = btn_height;
+                  txt = "<--"} in
+  let next_btn = {x = btn_x + btn_width / 2 + btn_margin_x / 4;
+                  y = solve_btn.y - btn_height - btn_margin_y / 2;
+                  w = btn_width / 2 - btn_margin_x / 4; h = btn_height;
+                  txt = "-->"} in
+  let quit_btn = {x = btn_x; y = prev_btn.y - btn_height - btn_margin_y / 2;
+                  w = btn_width; h = btn_height;
+                  txt = "Quitter"} in
+  let dist_btn = {x = btn_x; y = quit_btn.y - btn_height - btn_margin_y / 2;
+                  w = btn_width; h = btn_height;
+                  txt = "Distance : "} in
+
+  let erase_btn btn =
+    Graphics.set_color bkgd_color;
+    fill_rect btn.x btn.y btn.w btn.h
+  in
+  let draw_btn_txt btn txt =
+    let txt = if txt = "" then btn.txt else btn.txt ^ txt in
+    let txtw, txth = text_size txt in
+    moveto (btn.x + btn.w / 2 - txtw / 2) (btn.y + btn.h / 2 - txth / 2);
+    Graphics.set_color black;
+    draw_string txt;
+  in
+  let draw_btn btn =
+    erase_btn btn;
+    Graphics.set_color btn_color;
+    fill_rect btn.x btn.y btn.w btn.h;
+    Graphics.set_color black;
+    draw_rect btn.x btn.y btn.w btn.h;
+    draw_btn_txt btn ""
+  in
+  let draw_dist_btn () =
+    erase_btn dist_btn;
+    draw_btn_txt dist_btn (string_of_int (!distance + 1) ^ "/" ^
+                           string_of_int (Array.length distances))
+  in
+  let draw_bravo_btn () =
+    erase_btn bravo_btn;
+    draw_btn_txt bravo_btn "";
+  in
+
+  let has_clicked btn e =
+    e.mouse_x >= btn.x && e.mouse_x < btn.x + btn.w &&
+    e.mouse_y >= btn.y && e.mouse_y < btn.y + btn.h
+  in
+
+  draw_btn solve_btn;
+  draw_btn reset_btn;
+  draw_btn prev_btn;
+  draw_btn next_btn;
+  draw_btn quit_btn;
+  draw_dist_btn ();
+
+  (* Color circle *)
+  let draw_color_circle () =
+    let x, y, r = voronoi_width + margin_right / 2,
+                  voronoi_height + margin_top / 2,
+                  margin_top / 2 - btn_margin_y in
     set_color !c;
     fill_circle x y r;
-    set_color black;
+    Graphics.set_color black;
     draw_circle x y r
   in
+  draw_color_circle ();
 
-  let draw_distance () =
-    let txt = dist_btn.txt ^ string_of_int (!distance + 1) ^ "/"
-              ^ string_of_int (Array.length distances) in
-    erase_btn dist_btn bkgd_color;
-    set_color black;
-    moveto (button_x + button_width / 2 - (fst (text_size txt)) / 2)
-           (dist_btn.y + button_height / 2 - (snd (text_size txt)) / 2);
-    draw_string txt
-  in
 
-  let erase_bravo () = erase_btn bravo_btn bkgd_color in
-
-  draw_distance ();
-  draw_current_color ();
-  draw_voronoi v !m;
   synchronize ();
   while !state = Play do
     let e = wait_next_event[Button_down; Key_pressed] in
@@ -321,8 +370,8 @@ let play v =
         fnc := produce_constraints cl !b;
         if !graph_drawn then (draw_graph v !b; synchronize ());
         reset_voronoi cl v;
-        erase_bravo ();
-        draw_distance ();
+        erase_btn bravo_btn;
+        draw_dist_btn ();
         draw_voronoi v !m;
         z := 0;
         synchronize ()
@@ -332,12 +381,6 @@ let play v =
         if !graph_drawn then draw_graph v !b else draw_voronoi v !m;
         synchronize ()
       end
-(*
-      else if compare e.key 'a' >= 0 &&
-              compare e.key (char_of_int (int_of_char 'a' + List.length voronois)) <= 0 then begin
-        i := int_of_char
-              end
-*)
     end
     else if e.button then begin
       if has_clicked solve_btn e then begin
@@ -349,7 +392,7 @@ let play v =
         let valuation = Sat.solve (!fnc') in
         if valuation <> None then begin
           color_from_valuation v (get valuation);
-          z := Array.length cl - count_pre_colored cl
+          z := Array.length cl - ncl
         end;
         draw_voronoi v !m;
         synchronize ()
@@ -358,16 +401,18 @@ let play v =
         reset_voronoi cl v;
         z := 0;
         draw_voronoi v !m;
-        erase_bravo ();
+        erase_btn bravo_btn;
         synchronize ()
       end
       else if has_clicked quit_btn e then
         state := Quit
-      else if has_clicked next_btn e then
+      else if has_next && has_clicked next_btn e then
         state := Next
+      else if has_prev && has_clicked prev_btn e then
+        state := Previous
       else if x < fst v.dim && y > snd v.dim + 1 then begin
         c := point_color x y;
-        draw_current_color ();
+        draw_color_circle ();
         synchronize ()
       end
       else if x < fst v.dim && y < snd v.dim then begin
@@ -381,14 +426,14 @@ let play v =
                           x = v.seeds.(i).x; y = v.seeds.(i).y};
           draw_voronoi v !m;
 
-          if !z = Array.length cl - count_pre_colored cl then begin
+          if !z = Array.length cl - ncl then begin
             let fnc' = ref !fnc in
             for i = 0 to Array.length cl - 1 do
               if cl.(i) = None then
                 fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
             done;
             if Sat.solve (!fnc') <> None then begin
-              draw_btn bravo_btn bkgd_color false
+              draw_bravo_btn ();
             end
           end;
           synchronize ()
@@ -399,16 +444,30 @@ let play v =
   done;
   !state;;
 
+
 let main () =
-  let rec aux l =
-    match l with
-    | [] -> ()
-    | v :: t -> if play v = Next then aux t else ()
-  in
   open_graph (" 1x1");
   clear_graph ();
   auto_synchronize false;
-  aux voronois;
+
+  let rec walk_voronois prev next current =
+    let state = play current (prev <> []) (next <> []) in
+    match state with
+    | Quit -> ()
+    | Previous -> begin
+      match prev with
+      | [] -> ()
+      | h :: t -> walk_voronois t (current :: next) h
+      end
+    | Next -> begin
+      match next with
+      | [] -> ()
+      | h :: t -> walk_voronois (current :: prev) t h
+      end
+    | _ -> ()
+  in
+  let hd = List.hd voronois in
+  walk_voronois [] (List.tl voronois) hd;
   close_graph ();;
 
 main ();;
