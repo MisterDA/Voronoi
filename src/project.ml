@@ -5,20 +5,6 @@ open Examples;;
 exception No_value;;
 let get = function None -> raise No_value | Some(a) -> a;;
 
-let set_color c =
-  if c = white then
-    set_color (rgb 246 247 189)
-  else if c = red then
-    set_color (rgb 191 77 40)
-  else if c = yellow then
-    set_color (rgb 230 172 39)
-  else if c = blue then
-    set_color (rgb 128 188 163)
-  else if c = green then
-    set_color (rgb 101 86 67)
-  else
-    set_color c;;
-
 let euclidean (x1, y1) (x2, y2) =
   int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
 let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
@@ -27,6 +13,7 @@ let fn a b = int_of_float (sqrt ((float)(euclidean a b))) + taxicab a b;;
 let fn2 a b = taxicab a b + taxicab2 a b;;
 
 let distances = [| euclidean; taxicab; taxicab2; fn; fn2 |];;
+let ndistances = Array.length distances;;
 
 let regions_voronoi dist v =
   let width, height = v.dim in
@@ -39,8 +26,8 @@ let regions_voronoi dist v =
           if d' < !d then begin
             d := d';
             matrix.(x).(y) <- i
-          end
-        ) v.seeds
+          end)
+        v.seeds
     done
   done;
   matrix;;
@@ -54,7 +41,7 @@ let draw_voronoi v m =
          x < width - 1 && s <> m.(x + 1).(y) ||
          y < height - 1 && s <> m.(x).(y + 1) ||
          x > 0 && s <> m.(x - 1).(y) then
-        Graphics.set_color white
+        set_color black
       else begin
         match v.seeds.(m.(x).(y)).c with
         | None -> set_color white
@@ -95,14 +82,11 @@ end;;
 
 module Sat = Sat_solver.Make(Variables);;
 
-let make_color_array v =
-  let cl = Array.make (Array.length v.seeds) None in
-  Array.iteri (fun i s -> cl.(i) <- s.c) v.seeds;
-  cl;;
+let make_color_array v = Array.map (fun s -> s.c) v.seeds;;
 
 let count_pre_colored cl =
   let count = ref 0 in
-  Array.iter (fun c -> if c <> None then count := !count + 1) cl;
+  Array.iter (fun c -> if c <> None then incr count) cl;
   !count;;
 
 let get_colors cl =
@@ -112,8 +96,8 @@ let get_colors cl =
         let c = get c in
         let ok = ref true in
         Array.iter (fun c' -> if c = c' then ok := false) !colors;
-        if !ok then colors := Array.append !colors [| c |]
-    ) cl;
+        if !ok then colors := Array.append !colors [| c |])
+    cl;
   !colors
 ;;
 
@@ -177,10 +161,10 @@ let rec color_from_valuation v vl =
     color_from_valuation v t;;
 
 let reset_voronoi cl v =
-  for i = 0 to Array.length cl - 1 do
-    if cl.(i) = None then
-      v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y}
-  done;;
+  Array.iteri (fun i c ->
+      if c = None then
+        v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y})
+    cl;;
 
 let draw_graph v b =
   set_color black;
@@ -193,6 +177,8 @@ let draw_graph v b =
     done
   done;;
 
+
+(* Print functions *)
 let print_bool b = print_string (if b then "true" else "false");;
 
 let print_valuation v =
@@ -226,7 +212,7 @@ let rec print_fnc fnc =
   | [] -> ()
   | h::t -> print_valuation (Some h); print_fnc t;;
 
-type cell = {x : int; y : int; w : int; h : int; c : color};;
+
 type button = {x : int; y : int; w : int; h : int; txt : string};;
 type game_state = Play | Previous | Next | Quit;;
 
@@ -256,17 +242,17 @@ let play v has_prev has_next =
   fill_rect 0 voronoi_height cell_width margin_top;
   Array.iteri (fun i c ->
       set_color c;
-      fill_rect ((i+1) * cell_width) voronoi_height cell_width margin_top
-    ) colors;
-  Graphics.set_color black;
+      fill_rect ((i+1) * cell_width) voronoi_height cell_width margin_top)
+    colors;
+  set_color black;
   moveto 0 voronoi_height;
   lineto voronoi_width voronoi_height;
 
   (* Draw right background *)
   let bkgd_color = rgb 197 188 142 in
-  Graphics.set_color bkgd_color;
+  set_color bkgd_color;
   fill_rect voronoi_width 0 margin_right (voronoi_height + margin_top);
-  Graphics.set_color black;
+  set_color black;
   moveto voronoi_width 0;
   lineto voronoi_width (voronoi_height + margin_top);
 
@@ -301,21 +287,21 @@ let play v has_prev has_next =
                   txt = "Distance : "} in
 
   let erase_btn btn =
-    Graphics.set_color bkgd_color;
+    set_color bkgd_color;
     fill_rect btn.x btn.y btn.w btn.h
   in
   let draw_btn_txt btn txt =
     let txt = if txt = "" then btn.txt else btn.txt ^ txt in
     let txtw, txth = text_size txt in
     moveto (btn.x + btn.w / 2 - txtw / 2) (btn.y + btn.h / 2 - txth / 2);
-    Graphics.set_color black;
+    set_color black;
     draw_string txt;
   in
   let draw_btn btn =
     erase_btn btn;
-    Graphics.set_color btn_color;
+    set_color btn_color;
     fill_rect btn.x btn.y btn.w btn.h;
-    Graphics.set_color black;
+    set_color black;
     draw_rect btn.x btn.y btn.w btn.h;
     draw_btn_txt btn ""
   in
@@ -336,8 +322,8 @@ let play v has_prev has_next =
 
   draw_btn solve_btn;
   draw_btn reset_btn;
-  draw_btn prev_btn;
-  draw_btn next_btn;
+  if has_prev then draw_btn prev_btn;
+  if has_next then draw_btn next_btn;
   draw_btn quit_btn;
   draw_dist_btn ();
 
@@ -348,61 +334,60 @@ let play v has_prev has_next =
                   margin_top / 2 - btn_margin_y in
     set_color !c;
     fill_circle x y r;
-    Graphics.set_color black;
+    set_color black;
     draw_circle x y r
   in
   draw_color_circle ();
 
 
-  synchronize ();
+  (* Event loop *)
   while !state = Play do
+    synchronize ();
     let e = wait_next_event[Button_down; Key_pressed] in
     let x, y = e.mouse_x, e.mouse_y in
 
     if e.keypressed then begin
       if e.key = Char.chr 27 then
         state := Quit
-      else if compare e.key '1' >= 0 &&
-              compare e.key (char_of_int (int_of_char '0' + Array.length distances)) <= 0 then begin
+      else if !distance <> int_of_char e.key - int_of_char '0' - 1 &&
+              compare e.key '1' >= 0 &&
+              compare e.key (char_of_int (int_of_char '0' + ndistances)) <= 0
+      then begin
+        reset_voronoi cl v;
         distance := int_of_char e.key - int_of_char '0' - 1;
         m := regions_voronoi distances.(!distance) v;
         b := adjacences_voronoi v !m;
         fnc := produce_constraints cl !b;
-        if !graph_drawn then (draw_graph v !b; synchronize ());
-        reset_voronoi cl v;
+        z := 0;
         erase_btn bravo_btn;
         draw_dist_btn ();
         draw_voronoi v !m;
-        z := 0;
-        synchronize ()
+        if !graph_drawn then draw_graph v !b
       end
       else if e.key = 'g' then begin
-        graph_drawn := if !graph_drawn then false else true;
-        if !graph_drawn then draw_graph v !b else draw_voronoi v !m;
-        synchronize ()
+        graph_drawn := not !graph_drawn;
+        if !graph_drawn then draw_graph v !b else draw_voronoi v !m
       end
     end
     else if e.button then begin
       if has_clicked solve_btn e then begin
         let fnc' = ref !fnc in
-        for i = 0 to Array.length v.seeds - 1 do
-          if v.seeds.(i).c <> None then
-            fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
-        done;
-        let valuation = Sat.solve (!fnc') in
-        if valuation <> None then begin
-          color_from_valuation v (get valuation);
-          z := Array.length cl - ncl
-        end;
-        draw_voronoi v !m;
-        synchronize ()
+        Array.iteri (fun i s ->
+             if s.c <> None then
+              fnc' := [(true, {Variables.i = i; c = get s.c})] :: !fnc')
+          v.seeds;
+        match Sat.solve (!fnc') with
+        | Some valuation ->
+          color_from_valuation v valuation;
+          z := Array.length cl - ncl;
+          draw_voronoi v !m
+        | None -> ()
       end
       else if has_clicked reset_btn e then begin
         reset_voronoi cl v;
         z := 0;
         draw_voronoi v !m;
-        erase_btn bravo_btn;
-        synchronize ()
+        erase_btn bravo_btn
       end
       else if has_clicked quit_btn e then
         state := Quit
@@ -412,38 +397,31 @@ let play v has_prev has_next =
         state := Previous
       else if x < fst v.dim && y > snd v.dim + 1 then begin
         c := point_color x y;
-        draw_color_circle ();
-        synchronize ()
+        draw_color_circle ()
       end
       else if x < fst v.dim && y < snd v.dim then begin
         let i = !m.(x).(y) in
         if cl.(i) = None then begin
-          if !c <> white && v.seeds.(i).c = None then
-            z := !z + 1
-          else if !c = white && v.seeds.(i).c <> None && !z > 0 then
-            z := !z - 1;
+          if !c <> white && v.seeds.(i).c = None then incr z else
+          if !c = white && v.seeds.(i).c <> None && !z > 0 then decr z;
           v.seeds.(i) <- {c = if !c = white then None else Some !c;
                           x = v.seeds.(i).x; y = v.seeds.(i).y};
           draw_voronoi v !m;
 
           if !z = Array.length cl - ncl then begin
             let fnc' = ref !fnc in
-            for i = 0 to Array.length cl - 1 do
-              if cl.(i) = None then
-                fnc' := [(true, {Variables.i = i; c = get v.seeds.(i).c})] :: !fnc'
-            done;
-            if Sat.solve (!fnc') <> None then begin
-              draw_bravo_btn ();
-            end
-          end;
-          synchronize ()
+            Array.iteri (fun i s ->
+                if cl.(i) = None then
+                  fnc' := [(true, {Variables.i = i; c = get s.c})] :: !fnc')
+              v.seeds;
+            if Sat.solve (!fnc') <> None then draw_bravo_btn ()
+            else erase_btn bravo_btn
+          end else erase_btn bravo_btn
         end
       end
-    end;
-    if !graph_drawn then (draw_graph v !b; synchronize ())
+    end
   done;
   !state;;
-
 
 let main () =
   open_graph (" 1x1");
