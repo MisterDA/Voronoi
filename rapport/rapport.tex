@@ -18,6 +18,30 @@ Rapport}
 \date{\today}
 \maketitle
 
+\section{Interface}
+Pour jouer, le joueur sélectionne la couleur souhaitée parmi les cases du haut
+de la fenêtre. Il peut ensuite colorer les régions du diagramme. Le bouton en
+haut à droite montre la couleur selectionnée. Si une coloration valide est
+trouvée, un message de félicitations est affiché.
+
+Le diagramme peut être réinitialisé avec le bouton \textit{Nettoyer}, et une
+coloration valide (s'il en existe une) est affichée grâce au bouton
+\textit{Solution}. Pour quitter, il suffit de cliquer sur le bouton
+\textit{Quitter} ou de cliquer sur la touche \textit{Echap.}.
+
+Le premier diagramme de la liste est affiché. L'utilisateur peut se déplacer à
+tout moment dans la liste des diagrammes et choisir celui avec lequel jouer.
+Le diagramme actuel est alors réinitialisé avant de passer au nouveau.
+
+L'utilisateur peut également changer de fonctions de distance, provoquant
+également la réinitialisation du diagramme. Nous proposons quelques fonctions,
+accessibles depuis les touches numériques. Un index des distances est affiché en
+bas à droite.
+
+La touche \textit{g} permet d'afficher le graphe d'adjacence des régions.
+
+\section{Forme Normale Conjonctive}
+
 Soit $G = (S, A)$ un graphe, $C$ l'ensemble des couleurs ($|C| := 4$). \\
 $p_{i, j}$ : la région $i \in S$ est de couleur $j \in C$.
 \begin{itemize}

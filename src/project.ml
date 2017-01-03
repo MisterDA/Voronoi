@@ -1,3 +1,5 @@
+(** Module principal du projet *)
+
 open Graphics;;
 open Voronoi;;
 open Examples;;
@@ -5,17 +7,25 @@ open Examples;;
 exception No_value;;
 let get = function None -> raise No_value | Some(a) -> a;;
 
-let euclidean (x1, y1) (x2, y2) =
+(** Type alias pour les fonctions de distance *)
+type distance = (int * int) -> (int * int) -> int;;
+
+let euclidean : distance = fun (x1, y1) (x2, y2) ->
   int_of_float ((float)(x1 - x2) ** 2. +. (float)(y1 - y2) ** 2.);;
-let taxicab (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2);;
-let taxicab2 (x1, y1) (x2, y2) = max (abs (x1 - x2)) (abs (y1 - y2));;
-let fn a b = int_of_float (sqrt ((float)(euclidean a b))) + taxicab a b;;
-let fn2 a b = taxicab a b + taxicab2 a b;;
+let taxicab : distance = fun (x1, y1) (x2, y2) ->
+  abs (x1 - x2) + abs (y1 - y2);;
+let taxicab2 : distance = fun (x1, y1) (x2, y2) ->
+  max (abs (x1 - x2)) (abs (y1 - y2));;
+let fn : distance = fun a b ->
+  int_of_float (sqrt ((float)(euclidean a b))) + taxicab a b;;
+let fn2 : distance = fun a b -> taxicab a b + taxicab2 a b;;
 
 let distances = [| euclidean; taxicab; taxicab2; fn; fn2 |];;
 let ndistances = Array.length distances;;
 
-let regions_voronoi dist v =
+(** Détermine les différentes régions du graphe à partir d'une fonction de
+    distance *)
+let regions_voronoi (dist : distance) v =
   let width, height = v.dim in
   let matrix = Array.make_matrix width height (-1) in
   for x = 0 to width - 1 do
@@ -32,6 +42,8 @@ let regions_voronoi dist v =
   done;
   matrix;;
 
+(** Dessine le graphe avec la délimitation des différentes régions, tenant
+    compte de la pré-coloration *)
 let draw_voronoi v m =
   let width, height = v.dim in
   for x = 0 to width - 1 do
@@ -51,6 +63,8 @@ let draw_voronoi v m =
      done
   done;;
 
+(** Définit la matrice d'adjacence des régions du voronoi : deux régions sont
+    adjacentes si elles ont une délimitation commune *)
 let adjacences_voronoi v m =
   let n = Array.length v.seeds in
   let b = Array.make_matrix n n false in
@@ -82,13 +96,18 @@ end;;
 
 module Sat = Sat_solver.Make(Variables);;
 
+(** Dresse un tableau contenant la couleur et le germe des régions d'un voronoi *)
 let make_color_array v = Array.map (fun s -> s.c) v.seeds;;
 
+(** Renvoie le nombre de régions pré-coloriées à partir d'un tableau du type de
+    la fonction précédente *)
 let count_pre_colored cl =
   let count = ref 0 in
   Array.iter (fun c -> if c <> None then incr count) cl;
   !count;;
 
+(** Renvoie un tableau contenant les différentes couleurs présentes dans la
+    pré-coloration du voronoi *)
 let get_colors cl =
   let colors = ref (Array.make 0 0) in
   Array.iter (fun c ->
@@ -101,6 +120,8 @@ let get_colors cl =
   !colors
 ;;
 
+(** Produit la FNC avec les conditions d'existence, d'unicité et d'adjacence des
+    régions du voronoi *)
 let produce_constraints cl b =
   let colors = get_colors cl in
 
@@ -140,6 +161,7 @@ let produce_constraints cl b =
     fnc
   in
 
+  (* La valuation correspondant à la pré-coloration *)
   let pre_colored fnc =
     for i = 0 to Array.length b - 1 do
       match cl.(i) with
@@ -151,6 +173,8 @@ let produce_constraints cl b =
 
   !(pre_colored (exists (unique (adjacence (ref [])))));;
 
+(** Permet d'obtenir une coloration satisfaisante à partir d'une valuation bien
+    définie *)
 let rec color_from_valuation v vl =
   match vl with
   | [] -> ()
@@ -160,12 +184,14 @@ let rec color_from_valuation v vl =
       v.seeds.(l.Variables.i) <- {c = Some l.Variables.c; x = s.x; y = s.y};
     color_from_valuation v t;;
 
+(** Permet de rafraîchir le graphe à son état d'origine *)
 let reset_voronoi cl v =
   Array.iteri (fun i c ->
       if c = None then
         v.seeds.(i) <- {c = None; x = v.seeds.(i).x; y = v.seeds.(i).y})
     cl;;
 
+(** Dessine le graphe *)
 let draw_graph v b =
   set_color black;
   for i = 0 to Array.length b - 1 do
@@ -178,9 +204,11 @@ let draw_graph v b =
   done;;
 
 
-(* Print functions *)
+(** Affiche la valeur d'un booléen *)
 let print_bool b = print_string (if b then "true" else "false");;
 
+(** Affiche la valuation, c'est-à-dire une liste d'éléments de la forme
+    (booléen, {n° région, couleur}) *)
 let print_valuation v =
   let print_color c =
     print_string (
@@ -207,6 +235,7 @@ let print_valuation v =
     end
   | None -> ();;
 
+(** Affiche la FNC qui est un ensemble de valuations *)
 let rec print_fnc fnc =
   match fnc with
   | [] -> ()
@@ -216,13 +245,14 @@ let rec print_fnc fnc =
 type button = {x : int; y : int; w : int; h : int; txt : string};;
 type game_state = Play | Previous | Next | Quit;;
 
+(** Fonction de jeu *)
 let play v has_prev has_next =
-  (* Window setup *)
+  (* Configuration de la fenêtre de jeu *)
   let voronoi_width, voronoi_height = v.dim in
   let margin_right, margin_top = 150, 50 in
   resize_window (voronoi_width + margin_right) (voronoi_height + margin_top);
 
-  (* Voronoï *)
+  (* Instructions relatives au voronoi *)
   let distance = ref 0 in
   let m = ref (regions_voronoi distances.(!distance) v) in
   let b = ref (adjacences_voronoi v !m) in
@@ -235,7 +265,7 @@ let play v has_prev has_next =
   let state = ref Play in
   draw_voronoi v !m;
 
-  (* Color cells *)
+  (* Coloration des régions *)
   let colors = get_colors cl in
   let cell_width = voronoi_width / (Array.length colors + 1) in
   set_color white;
@@ -248,7 +278,7 @@ let play v has_prev has_next =
   moveto 0 voronoi_height;
   lineto voronoi_width voronoi_height;
 
-  (* Draw right background *)
+  (* Arrière-plan droit *)
   let bkgd_color = rgb 197 188 142 in
   set_color bkgd_color;
   fill_rect voronoi_width 0 margin_right (voronoi_height + margin_top);
@@ -256,7 +286,7 @@ let play v has_prev has_next =
   moveto voronoi_width 0;
   lineto voronoi_width (voronoi_height + margin_top);
 
-  (* Buttons *)
+  (* Boutons *)
   let btn_color = rgb 105 103 88 in
   let btn_margin_x, btn_margin_y = 10, 6 in
   let btn_width, btn_height = margin_right - btn_margin_x, 25 in
@@ -290,6 +320,7 @@ let play v has_prev has_next =
     set_color bkgd_color;
     fill_rect btn.x btn.y btn.w btn.h
   in
+
   let draw_btn_txt btn txt =
     let txt = if txt = "" then btn.txt else btn.txt ^ txt in
     let txtw, txth = text_size txt in
@@ -297,6 +328,7 @@ let play v has_prev has_next =
     set_color black;
     draw_string txt;
   in
+
   let draw_btn btn =
     erase_btn btn;
     set_color btn_color;
@@ -305,11 +337,13 @@ let play v has_prev has_next =
     draw_rect btn.x btn.y btn.w btn.h;
     draw_btn_txt btn ""
   in
+
   let draw_dist_btn () =
     erase_btn dist_btn;
     draw_btn_txt dist_btn (string_of_int (!distance + 1) ^ "/" ^
                            string_of_int (Array.length distances))
   in
+
   let draw_bravo_btn () =
     erase_btn bravo_btn;
     draw_btn_txt bravo_btn "";
@@ -327,7 +361,7 @@ let play v has_prev has_next =
   draw_btn quit_btn;
   draw_dist_btn ();
 
-  (* Color circle *)
+  (* Cercle avec la couleur du point courant *)
   let draw_color_circle () =
     let x, y, r = voronoi_width + margin_right / 2,
                   voronoi_height + margin_top / 2,
@@ -340,7 +374,7 @@ let play v has_prev has_next =
   draw_color_circle ();
 
 
-  (* Event loop *)
+  (* Boucle de jeu *)
   while !state = Play do
     synchronize ();
     let e = wait_next_event[Button_down; Key_pressed] in
@@ -391,10 +425,14 @@ let play v has_prev has_next =
       end
       else if has_clicked quit_btn e then
         state := Quit
-      else if has_next && has_clicked next_btn e then
+      else if has_next && has_clicked next_btn e then begin
+        reset_voronoi cl v;
         state := Next
-      else if has_prev && has_clicked prev_btn e then
+      end
+      else if has_prev && has_clicked prev_btn e then begin
+        reset_voronoi cl v;
         state := Previous
+      end
       else if x < fst v.dim && y > snd v.dim + 1 then begin
         c := point_color x y;
         draw_color_circle ()
@@ -423,11 +461,13 @@ let play v has_prev has_next =
   done;
   !state;;
 
+(** Fonction principale *)
 let main () =
   open_graph (" 1x1");
   clear_graph ();
   auto_synchronize false;
 
+  (* Permet de choisir le graphe à colorer *)
   let rec walk_voronois prev next current =
     let state = play current (prev <> []) (next <> []) in
     match state with

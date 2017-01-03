@@ -1,3 +1,5 @@
+(** Définitions des types *)
+
 open Graphics;;
 
 type seed = {c : color option; x : int; y : int};;
